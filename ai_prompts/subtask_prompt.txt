@@ -1,0 +1,75 @@
+now [gripper open moving above red block to line up grasp] next [lower gripper and grasp red block]
+now [gripper open moving above blue block to line up grasp] next [lower gripper and grasp blue block]
+now [gripper open moving above green block to line up grasp] next [lower gripper and grasp green block]
+now [gripper open moving above yellow ball to line up grasp] next [lower gripper and grasp yellow ball]
+now [camera centered on workspace scanning for target object] next [approach target object with gripper open]
+
+now [approaching red block from above with gripper open] next [fine tune position to center on red block]
+now [approaching blue block from above with gripper open] next [fine tune position to center on blue block]
+now [approaching red cup from above with gripper open] next [adjust gripper orientation to match cup]
+now [approaching white cup from above with gripper open] next [lower to pre grasp height over cup]
+
+now [fine tuning gripper position above red block for alignment] next [lower to grasp height over red block]
+now [fine tuning gripper position above blue block for alignment] next [lower to grasp height over blue block]
+now [fine tuning gripper yaw to match object edges] next [close gripper to secure object]
+now [aligning gripper to object center while maintaining safe height] next [lower gripper to grasp height]
+
+now [lowering gripper toward red block at grasp height] next [close gripper to grasp red block]
+now [lowering gripper toward blue block at grasp height] next [close gripper to grasp blue block]
+now [lowering gripper toward yellow ball at grasp height] next [close gripper to grasp yellow ball]
+now [lowering gripper toward red cup at grasp height] next [close gripper to grasp red cup]
+
+now [closing gripper around red block to secure grasp] next [lift red block to safe height]
+now [closing gripper around blue block to secure grasp] next [lift blue block to safe height]
+now [closing gripper around yellow ball to secure grasp] next [lift yellow ball to safe height]
+now [closing gripper around red cup to secure grasp] next [lift red cup to safe height]
+
+now [lifting red block off table while keeping it stable] next [carry red block toward basket]
+now [lifting blue block off table while keeping it stable] next [carry blue block toward basket]
+now [lifting yellow ball off table while keeping it stable] next [carry yellow ball toward basket]
+now [lifting red cup off table while keeping it upright] next [carry red cup toward plate]
+now [lifting white cup off table while keeping it upright] next [carry white cup toward plate]
+
+now [carrying red block above basket opening at safe height] next [move above basket center for placement]
+now [carrying blue block above basket opening at safe height] next [move above basket center for placement]
+now [carrying yellow ball above basket opening at safe height] next [move above basket center for placement]
+now [carrying red cup above plate at safe height] next [move above plate center for placement]
+now [carrying white cup above plate at safe height] next [move above plate center for placement]
+
+now [positioning held object above basket center for accurate drop] next [lower object into basket]
+now [positioning held object above plate center for accurate placement] next [lower object onto plate]
+now [hovering above target area while holding object steady] next [lower object to place height]
+
+now [lowering red block into basket while keeping it centered] next [open gripper to release red block]
+now [lowering blue block into basket while keeping it centered] next [open gripper to release blue block]
+now [lowering yellow ball into basket while keeping it centered] next [open gripper to release yellow ball]
+now [lowering red cup onto plate while keeping it upright] next [open gripper to release red cup]
+now [lowering white cup onto plate while keeping it upright] next [open gripper to release white cup]
+
+now [opening gripper to release object at target location] next [lift gripper away from object]
+now [releasing object slowly to avoid tipping] next [lift gripper to safe height]
+now [object released and stable at target] next [retreat from target area]
+
+now [retreating from basket area to avoid collision] next [return to safe height above workspace]
+now [retreating from plate area to avoid collision] next [return to observation pose]
+now [moving to safe height after placement] next [search for next object to sort]
+
+now [searching for next object to sort on the table] next [approach nearest unsorted object]
+now [choosing next object based on episode goal and scene layout] next [approach selected object with gripper open]
+now [moving camera and end effector to locate remaining objects] next [approach target object for grasp]
+
+now [pushing red block slightly to make it easier to grasp] next [re align above red block for grasp]
+now [nudging blue block away from edge to prevent slip] next [lower gripper and grasp blue block]
+now [sliding yellow ball toward reachable area] next [approach yellow ball from above]
+
+now [adjusting cup orientation to keep it upright] next [carry cup to plate for placement]
+now [rotating held object to match target orientation] next [lower object to place height]
+now [correcting end effector pose to avoid collision] next [continue carrying object to target]
+
+now [grasp attempt failed and gripper is empty above object] next [re align and retry grasp]
+now [object slipped during lift and is unstable] next [lower object back to table safely]
+now [placement unstable and object is tilted] next [adjust placement position and re release]
+
+now [task nearly complete with most objects sorted] next [place remaining object into target container]
+now [all objects placed and scene is stable] next [return to home pose]
+now [episode goal achieved and robot is idle] next [complete task]

@@ -1,0 +1,116 @@
+/* AI-mode panels injected by static/ai/ai_ui.js */
+
+.ai-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-color, #2f2f2f);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+}
+
+.ai-panel.hidden { display: none; }
+
+.ai-panel .ai-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.ai-panel .ai-grid-1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.ai-panel label {
+  display: block;
+  font-size: 12px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+.ai-panel input[type="number"],
+.ai-panel input[type="text"],
+.ai-panel select,
+.ai-panel textarea {
+  width: 100%;
+  background: rgba(0,0,0,0.25);
+  color: inherit;
+  border: 1px solid var(--border-color, #2f2f2f);
+  border-radius: 10px;
+  padding: 8px 10px;
+  outline: none;
+}
+
+.ai-panel textarea {
+  min-height: 140px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ai-panel .ai-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ai-panel .ai-hint {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.ai-panel .ai-status {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.ai-panel .ai-status.ok { color: #5edc84; }
+.ai-panel .ai-status.err { color: #ff6b6b; }
+
+.ai-mode-toggle {
+  margin-left: 10px;
+}
+
+.ai-panel .ai-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  opacity: 0.9;
+}
+
+@media (max-width: 900px) {
+  .ai-panel .ai-grid { grid-template-columns: 1fr; }
+}
+
+/* === AI episode list shortcuts === */
+
+#aiEpisodeBatchBar.ai-batch-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+#aiBatchStatus.ai-batch-status {
+  font-size: 12px;
+  opacity: 0.85;
+  margin-left: 6px;
+}
+
+.ai-ep-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-ep-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1;
+  border-radius: 999px;
+  white-space: nowrap;
+}

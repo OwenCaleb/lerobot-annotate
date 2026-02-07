@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LeRobot Annotate</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">LeRobot • Annotation Studio</p>
+        <h1>Label episodes with subtasks and dialogue.</h1>
+        <p class="subhead">Load any LeRobot dataset, step through episodes, and export parquet updates ready for training.</p>
+      </div>
+      <div class="status" id="status">Disconnected</div>
+    </header>
+
+    <section class="panel connect">
+      <h2>Connect Dataset</h2>
+      <form id="connectForm">
+        <div class="row">
+          <label>
+            Source
+            <select id="sourceSelect">
+              <option value="hf">Hugging Face Hub</option>
+              <option value="local">Local path</option>
+            </select>
+          </label>
+          <label>
+            Repo ID
+            <input id="repoInput" type="text" placeholder="lerobot/your-dataset" />
+          </label>
+          <label>
+            Local path
+            <input id="localInput" type="text" placeholder="/path/to/dataset" />
+          </label>
+          <label>
+            Revision
+            <input id="revisionInput" type="text" placeholder="main (optional)" />
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            Video key
+            <select id="videoKeySelect"></select>
+          </label>
+          <button type="submit" class="primary">Load dataset</button>
+        </div>
+      </form>
+      <div class="helper" id="connectHelper"></div>
+    </section>
+
+    <section class="workspace" id="workspace">
+      <aside class="panel episodes">
+        <div class="episodes-header">
+          <h2>Episodes</h2>
+          <input id="episodeSearch" type="search" placeholder="Search episode #" />
+        </div>
+        <ul id="episodeList"></ul>
+      </aside>
+
+      <main class="panel viewer">
+        <div class="viewer-header">
+          <div>
+            <h2 id="episodeTitle">Select an episode</h2>
+            <p id="episodeMeta" class="muted"></p>
+          </div>
+          <div class="viewer-actions">
+            <button id="saveEpisode" class="ghost">Save episode</button>
+            <button id="resetEpisode" class="ghost">Reset</button>
+          </div>
+        </div>
+
+        <div class="video-shell">
+          <video id="episodeVideo" controls preload="metadata"></video>
+          <div class="timeline" id="timeline"></div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" data-tab="subtasks">Subtasks</button>
+          <button class="tab" data-tab="highlevels">High-level prompts</button>
+        </div>
+
+        <section class="tab-panel active" id="subtasksPanel">
+          <div class="segment-form">
+            <div class="row">
+              <label>
+                Start (s)
+                <input id="subtaskStart" type="number" step="0.001" />
+              </label>
+              <label>
+                End (s)
+                <input id="subtaskEnd" type="number" step="0.001" />
+              </label>
+              <label class="grow">
+                Subtask label
+                <input id="subtaskLabel" type="text" placeholder="pick up block" />
+              </label>
+            </div>
+            <div class="row">
+              <button id="subtaskSetStart" class="ghost" type="button">Set start from video</button>
+              <button id="subtaskSetEnd" class="ghost" type="button">Set end from video</button>
+              <button id="addSubtask" class="primary" type="button">Add subtask</button>
+            </div>
+          </div>
+          <div id="subtaskList" class="segment-list"></div>
+        </section>
+
+        <section class="tab-panel" id="highlevelsPanel">
+          <div class="segment-form">
+            <div class="row">
+              <label>
+                Start (s)
+                <input id="hlStart" type="number" step="0.001" />
+              </label>
+              <label>
+                End (s)
+                <input id="hlEnd" type="number" step="0.001" />
+              </label>
+              <label class="grow">
+                User prompt
+                <input id="hlUser" type="text" placeholder="Please place the block on the left." />
+              </label>
+            </div>
+            <div class="row">
+              <label class="grow">
+                Robot response
+                <input id="hlRobot" type="text" placeholder="Got it, moving it now." />
+              </label>
+              <label>
+                Skill (optional)
+                <input id="hlSkill" type="text" placeholder="pick up block" />
+              </label>
+            </div>
+            <div class="row">
+              <label>
+                Scenario type
+                <input id="hlScenario" type="text" placeholder="specific_object" />
+              </label>
+              <label>
+                Response type
+                <input id="hlResponse" type="text" placeholder="confirmation" />
+              </label>
+              <button id="hlSetStart" class="ghost" type="button">Set start from video</button>
+              <button id="hlSetEnd" class="ghost" type="button">Set end from video</button>
+              <button id="addHighLevel" class="primary" type="button">Add high-level</button>
+            </div>
+          </div>
+          <div id="highLevelList" class="segment-list"></div>
+        </section>
+      </main>
+    </section>
+
+    <section class="panel export" id="exportPanel">
+      <h2>Export annotated dataset</h2>
+      
+      <div class="export-section">
+        <h3>Export to local directory</h3>
+        <div class="row">
+          <label class="grow">
+            Output directory (optional)
+            <input id="outputDir" type="text" placeholder="/tmp/lerobot_annotate_exports/your_dataset" />
+          </label>
+          <label class="checkbox">
+            <input id="copyVideos" type="checkbox" />
+            Copy videos instead of symlink
+          </label>
+          <button id="exportBtn" class="primary">Export locally</button>
+        </div>
+        <div class="helper" id="exportStatus"></div>
+      </div>
+
+      <div class="export-section">
+        <h3>Push to Hugging Face Hub</h3>
+        <div class="row">
+          <label class="grow">
+            HF Token
+            <input id="hfToken" type="password" placeholder="hf_xxxxxxxxxxxx" />
+          </label>
+          <label>
+            <a href="https://huggingface.co/settings/tokens" target="_blank" class="link-small">Get token →</a>
+          </label>
+        </div>
+        <div class="row">
+          <label class="checkbox">
+            <input id="pushInPlace" type="checkbox" checked />
+            Push to original repo (update in place)
+          </label>
+        </div>
+        <div class="row" id="newRepoRow">
+          <label class="grow">
+            New repo ID
+            <input id="newRepoId" type="text" placeholder="your-username/new-dataset-name" />
+          </label>
+          <label class="checkbox">
+            <input id="privateRepo" type="checkbox" />
+            Private repository
+          </label>
+        </div>
+        <div class="row">
+          <label class="grow">
+            Commit message
+            <input id="commitMessage" type="text" placeholder="Add annotations" value="Add annotations from LeRobot Annotate" />
+          </label>
+          <button id="pushHubBtn" class="primary" onclick="handlePushToHub()">Push to Hub</button>
+        </div>
+        <div class="helper" id="pushHubStatus"></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script src="/static/ai_plugin.js"></script>
+</body>
+</html>

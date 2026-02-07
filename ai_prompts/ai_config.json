@@ -1,0 +1,31 @@
+{
+  "enabled": true,
+  "openai_base_url": "http://127.0.0.1:8000/v1",
+  "openai_api_key": "EMPTY",
+  "model": "qwen25vl",
+  "request_timeout_s": 120,
+  "image_max_side": 768,
+  "subtasks": {
+    "stride_s": 3,
+    "summary_frames": 60,
+    "max_steps": 300,
+    "temperature": 0.2,
+    "max_tokens": 64,
+    "language": "en",
+    "system_prompt": "You are a robotic manipulation annotation assistant. You will be given a single video sampled during a specific time index from an episode. The episode task is provided in square brackets. Infer what the robot is doing now and what it is most likely to do next as the immediate intent. Output only a JSON object with a single key \"label\". The value must follow this exact format on one line: now [CURRENT STATE] next [NEXT ACTION]. Both CURRENT STATE and NEXT ACTION must be detailed verb first phrases that mention the relevant object and target when possible. Use the requested language. Do not output any extra keys. Do not output any commentary. Do not wrap in markdown. Do not use numbering. Avoid punctuation. Use only plain words and spaces inside the brackets.",
+    "user_prompt_template": "Episode summary:\n{episode_summary}\nLabel demos, one per line. Each line follows: now [CURRENT STATE] next [NEXT ACTION]\n{examples}\n\nNow label the active subtask at time {time_s}s.\nLanguage: {language}\n\nNow produce the label for the image at time {time_s}s.\nReturn JSON only: {\"label\": \"now [CURRENT STATE] next [NEXT ACTION]\"}"
+  },
+  "fake_vqa": {
+    "stride_s": 3,
+    "window_s": 3,
+    "window_frames": 60,
+    "temperature": 0.2,
+    "max_tokens": 128,
+    "language": "en",
+    "scenario_type": "vqa",
+    "response_type": "answer",
+    "skill": "fake_vqa",
+    "system_prompt": "You generate stable image based VQA supervision from a short video segment. You will be given a video sampled within a brief time window. Your job is to create exactly one spatial relation QA pair that is answerable from the video alone and remains true across the video. Stability rule: If the relationship you propose might change across the window because an object is moving, being manipulated, occluded, entering or leaving a container, or becoming ambiguous, then set skip=true. Selection rule: Prefer using at least one stable reference object such as basket or plate. Prefer relationships that are visually obvious and unlikely to flip across frames. Allowed relationships: left of, right of, in front of, behind, inside, outside, on top of, under, next to, closest to, farthest from, between. Choose for QA as much as you are sure.\nOutput rule:\nOutput only JSON with exactly these keys: skip (boolean), question (string), answer (string). Use English only. Do not include any extra keys or commentary. Do not wrap in markdown.",
+    "user_prompt_template": "Task: create one spatial relation VQA pair that is consistent across the video. Use only stable relations. Avoid objects that move significantly in the window.\n\nObject naming:\nUse short canonical names when possible such as red block, blue block, green block, yellow ball, blue ball, red cup, white cup, plate, basket. If an object is ambiguous, set skip=true.\n\nDemo Q/A pairs (two lines per pair):\n{qa_demos}\n\nSegment start time: {time_s}s\nConsistency check window: {window_s}s\nStride coverage: {stride_s}s\n\nReturn JSON only in this schema:\n{\"skip\": false, \"question\": \"...\", \"answer\": \"...\"}"
+  }
+}

@@ -1,0 +1,146 @@
+# Provide demo Q/A pairs, two lines per pair:
+# line 1: question demo
+# line 2: answer demo
+Where is the blue block relative to the basket?
+The blue block is inside the basket.
+
+Where is the red cup relative to the plate?
+The red cup is on top of the plate.
+
+Where is the red block relative to the green block?
+The red block is to the left of the green block.
+
+Where is the yellow ball relative to the blue ball?
+The yellow ball is in front of the blue ball.
+
+Where is the white cup relative to the red cup?
+The white cup is to the left of the red cup.
+
+Where is the green block relative to the basket?
+The green block is outside the basket.
+
+Where is the plate relative to the basket?
+The plate is to the left of the basket.
+
+Where is the basket relative to the plate?
+The basket is to the right of the plate.
+
+Where is the blue block relative to the plate?
+The blue block is behind the plate.
+
+Where is the red block relative to the plate?
+The red block is in front of the plate.
+
+Where is the yellow ball relative to the plate?
+The yellow ball is next to the plate.
+
+Where is the red cup relative to the basket?
+The red cup is outside the basket.
+
+Where is the blue ball relative to the basket?
+The blue ball is in front of the basket.
+
+Where is the red block relative to the basket?
+The red block is to the left of the basket.
+
+Where is the blue block relative to the basket?
+The blue block is to the right of the basket.
+
+Where is the green block relative to the plate?
+The green block is to the left of the plate.
+
+Where is the yellow ball relative to the basket?
+The yellow ball is to the right of the basket.
+
+Where is the red cup relative to the plate?
+The red cup is on top of the plate.
+
+Where is the white cup relative to the plate?
+The white cup is on the table next to the plate.
+
+Where is the blue ball relative to the plate?
+The blue ball is behind the plate.
+
+Where is the yellow ball relative to the blue block?
+The yellow ball is to the left of the blue block.
+
+Where is the blue block relative to the red block?
+The blue block is to the right of the red block.
+
+Where is the green block relative to the red block?
+The green block is behind the red block.
+
+Where is the red block relative to the green block?
+The red block is in front of the green block.
+
+Where is the blue block relative to the plate?
+The blue block is to the right of the plate.
+
+Where is the red cup relative to the basket and the plate?
+The red cup is on the plate and the plate is left of the basket.
+
+Where is the blue block relative to the basket and the plate?
+The blue block is inside the basket and the basket is right of the plate.
+
+Where is the yellow ball relative to the red block and the plate?
+The yellow ball is between the red block and the plate.
+
+Where is the blue block relative to the red block and the basket?
+The blue block is between the red block and the basket.
+
+Where is the red cup relative to the white cup?
+The red cup is to the right of the white cup.
+
+Where is the white cup relative to the red cup?
+The white cup is to the left of the red cup.
+
+Where is the blue ball relative to the yellow ball?
+The blue ball is to the right of the yellow ball.
+
+Where is the yellow ball relative to the blue ball?
+The yellow ball is to the left of the blue ball.
+
+Where is the basket relative to the red block?
+The basket is to the right of the red block.
+
+Where is the plate relative to the red block?
+The plate is in front of the red block.
+
+Where is the plate relative to the blue block?
+The plate is to the left of the blue block.
+
+Where is the basket relative to the blue block?
+The basket is behind the blue block.
+
+Where is the red cup relative to the basket?
+The red cup is to the left of the basket.
+
+Where is the white cup relative to the basket?
+The white cup is to the right of the basket.
+
+Where is the green block relative to the basket?
+The green block is in front of the basket.
+
+Where is the red block relative to the basket?
+The red block is behind the basket.
+
+Where is the blue block relative to the basket opening?
+The blue block is inside the basket.
+
+Where is the red cup relative to the plate center?
+The red cup is on top of the plate.
+
+Where is the blue block relative to the basket rim?
+The blue block is inside the basket.
+
+Where is the yellow ball relative to the basket rim?
+The yellow ball is outside the basket.
+
+Where is the red block relative to the basket?
+The red block is outside the basket.
+
+Where is the blue block relative to the table surface?
+The blue block is on the table.
+
+Where is the red cup relative to the table surface?
+The red cup is on top of the plate.
