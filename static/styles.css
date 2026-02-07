@@ -361,8 +361,39 @@ video {
   text-decoration: none;
 }
 
+.import-root {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.import-root h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  color: var(--accent-2);
+}
+
 .helper a:hover {
   text-decoration: underline;
+}
+
+.qa-item {
+  display: grid;
+  grid-template-columns: 90px 120px 1.6fr 1.2fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(31, 41, 55, 0.7);
+}
+
+.qa-item input {
+  width: 100%;
+}
+
+.qa-item button {
+  padding: 6px 10px;
 }
 
 button:disabled {

@@ -129,16 +129,25 @@ class SegmentHighLevel(BaseModel):
     response_type: str | None = None
 
 
+class SegmentQALabel(BaseModel):
+    frame_idx: int
+    type: str
+    question: str
+    answer: str
+
+
 class EpisodeAnnotationsPayload(BaseModel):
     episode_index: int
     subtasks: list[SegmentSubtask] = []
     high_levels: list[SegmentHighLevel] = []
+    qa_labels: list[SegmentQALabel] = []
 
 
 @dataclass
 class EpisodeAnnotations:
     subtasks: list[dict[str, Any]] = field(default_factory=list)
     high_levels: list[dict[str, Any]] = field(default_factory=list)
+    qa_labels: list[dict[str, Any]] = field(default_factory=list)
 
 
 class DataManager:
@@ -232,6 +241,7 @@ class DataManager:
                 self.annotations[ep_idx] = EpisodeAnnotations(
                     subtasks=payload.get("subtasks", []),
                     high_levels=payload.get("high_levels", []),
+                    qa_labels=payload.get("qa_labels", []),
                 )
             return
 
@@ -258,6 +268,7 @@ class DataManager:
                 str(ep_idx): {
                     "subtasks": ann.subtasks,
                     "high_levels": ann.high_levels,
+                    "qa_labels": ann.qa_labels,
                 }
                 for ep_idx, ann in self.annotations.items()
             },
@@ -391,6 +402,7 @@ class DataManager:
         self.annotations[payload.episode_index] = EpisodeAnnotations(
             subtasks=[seg.dict() for seg in payload.subtasks],
             high_levels=[seg.dict() for seg in payload.high_levels],
+            qa_labels=[seg.dict() for seg in payload.qa_labels],
         )
         self._save_annotations()
 
@@ -416,11 +428,14 @@ class DataManager:
 
         subtasks_df, subtask_map = build_subtasks_dataframe(self.annotations)
         tasks_df, task_map = build_high_level_dataframe(self.annotations)
+        qa_df = build_qa_labels_dataframe(self.annotations, fps)
 
         if not subtasks_df.empty:
             subtasks_df.to_parquet(dst_meta / "subtasks.parquet", engine="pyarrow", compression="snappy")
         if not tasks_df.empty:
             tasks_df.to_parquet(dst_meta / "tasks_high_level.parquet", engine="pyarrow", compression="snappy")
+        if not qa_df.empty:
+            qa_df.to_parquet(dst_meta / "qa_labels.parquet", engine="pyarrow", compression="snappy", index=False)
 
         # Update info.json features
         info_path = dst_meta / "info.json"
@@ -433,6 +448,10 @@ class DataManager:
         info["features"].setdefault(
             "task_index_high_level",
             {"dtype": "int64", "shape": [1], "names": None},
+        )
+        info["features"].setdefault(
+            "vqa",
+            {"dtype": "bool", "shape": [1], "names": None},
         )
         info_path.write_text(json.dumps(info, indent=2))
 
@@ -450,6 +469,7 @@ class DataManager:
             df = pd.read_parquet(src_path)
             df["subtask_index"] = -1
             df["task_index_high_level"] = -1
+            df["vqa"] = 0
 
             for ep_idx in df["episode_index"].unique():
                 ann = self.annotations.get(int(ep_idx))
@@ -473,6 +493,13 @@ class DataManager:
                         label_key="task_key",
                     )
 
+                if ann.qa_labels:
+                    df.loc[ep_mask, "vqa"] = assign_vqa_flags(
+                        df.loc[ep_mask, "timestamp"],
+                        ann.qa_labels,
+                        fps,
+                    )
+
             df.to_parquet(dst_path, engine="pyarrow", compression="snappy", index=False)
 
         # Copy or link videos
@@ -493,6 +520,7 @@ class DataManager:
             "output_dir": str(out_root),
             "subtasks": len(subtasks_df),
             "tasks_high_level": len(tasks_df),
+            "qa_labels": len(qa_df),
         }
 
 
@@ -538,6 +566,32 @@ def build_high_level_dataframe(annotations: dict[int, EpisodeAnnotations]) -> tu
     return df, task_map
 
 
+def build_qa_labels_dataframe(annotations: dict[int, EpisodeAnnotations], fps: float) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    fps = float(fps) if fps else 30.0
+    for ep_idx, ann in annotations.items():
+        for item in ann.qa_labels:
+            frame_idx = item.get("frame_idx")
+            try:
+                frame_idx_int = int(frame_idx)
+            except Exception:
+                continue
+            ts = float(frame_idx_int) / fps if fps > 0 else 0.0
+            rows.append(
+                {
+                    "episode_index": int(ep_idx),
+                    "frame_idx": frame_idx_int,
+                    "timestamp": round(ts, 6),
+                    "type": item.get("type", ""),
+                    "question": item.get("question", ""),
+                    "answer": item.get("answer", ""),
+                }
+            )
+
+    df = pd.DataFrame(rows)
+    return df
+
+
 def make_task_key(seg: dict[str, Any]) -> str:
     return "||".join(
         [
@@ -568,6 +622,32 @@ def assign_indices_by_segments(timestamps: pd.Series, segments: list[dict[str, A
                     label = make_task_key(seg)
                 values[i] = mapping.get(label, -1)
                 break
+    return values
+
+
+def assign_vqa_flags(timestamps: pd.Series, qa_labels: list[dict[str, Any]], fps: float) -> list[int]:
+    values = [0] * len(timestamps)
+    if not qa_labels:
+        return values
+
+    frame_set: set[int] = set()
+    for item in qa_labels:
+        try:
+            frame_set.add(int(item.get("frame_idx")))
+        except Exception:
+            continue
+
+    if not frame_set:
+        return values
+
+    fps = float(fps) if fps else 30.0
+    for i, ts in enumerate(timestamps):
+        try:
+            frame_idx = int(round(float(ts) * fps))
+        except Exception:
+            continue
+        if frame_idx in frame_set:
+            values[i] = 1
     return values
 
 
@@ -622,6 +702,7 @@ def get_annotations(episode_index: int) -> JSONResponse:
         "episode_index": episode_index,
         "subtasks": ann.subtasks,
         "high_levels": ann.high_levels,
+        "qa_labels": ann.qa_labels,
     })
 
 
@@ -641,12 +722,173 @@ def export_dataset(payload: dict[str, Any]) -> JSONResponse:
     return JSONResponse(result)
 
 
+def _require_loaded_dataset() -> None:
+    if manager.dataset_root is None or manager.info is None or manager.episodes_df is None:
+        raise HTTPException(status_code=400, detail="Dataset not loaded")
+
+
+def _parse_jsonl(path: Path) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    try:
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            s = raw.strip()
+            if not s:
+                continue
+            try:
+                obj = json.loads(s)
+                if isinstance(obj, dict):
+                    items.append(obj)
+            except Exception:
+                continue
+    except FileNotFoundError:
+        return []
+    return items
+
+
+@app.post("/api/import/subtasks_from_root")
+def import_subtasks_from_root(payload: ImportFromRootRequest) -> JSONResponse:
+    _require_loaded_dataset()
+    root = Path(payload.root_path).expanduser().resolve()
+    if not root.exists():
+        raise HTTPException(status_code=404, detail=f"Root path not found: {root}")
+
+    fps = float(manager.info.get("fps", 30)) if manager.info else 30.0
+    episodes = sorted(manager.episodes_df["episode_index"].unique())
+    episodes_updated = 0
+    segments_total = 0
+    missing_samples = 0
+
+    for ep_idx in episodes:
+        sample_dir = root / f"sample_{int(ep_idx):06d}"
+        seg_path = sample_dir / "segments.json"
+        if not seg_path.exists():
+            missing_samples += 1
+            continue
+        try:
+            data = json.loads(seg_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        segments_in = data.get("segments", []) if isinstance(data, dict) else []
+        segments: list[dict[str, Any]] = []
+        for seg in segments_in:
+            if not isinstance(seg, dict):
+                continue
+            start_frame = seg.get("start_frame")
+            end_frame = seg.get("end_frame")
+            label = str(seg.get("instruction", "")).strip()
+            if start_frame is None or end_frame is None or not label:
+                continue
+            try:
+                start = float(start_frame) / fps
+                end = float(end_frame) / fps
+            except Exception:
+                continue
+            if end <= start:
+                continue
+            segments.append({
+                "start": round(start, 3),
+                "end": round(end, 3),
+                "label": label,
+            })
+
+        if segments:
+            ann = manager.get_episode_annotations(int(ep_idx))
+            ann.subtasks = segments
+            episodes_updated += 1
+            segments_total += len(segments)
+
+    manager._save_annotations()
+    return JSONResponse({
+        "ok": True,
+        "episodes_updated": episodes_updated,
+        "segments": segments_total,
+        "missing_samples": missing_samples,
+    })
+
+
+@app.post("/api/import/highlevels_from_root")
+def import_highlevels_from_root(payload: ImportFromRootRequest) -> JSONResponse:
+    _require_loaded_dataset()
+    root = Path(payload.root_path).expanduser().resolve()
+    if not root.exists():
+        raise HTTPException(status_code=404, detail=f"Root path not found: {root}")
+    return JSONResponse({"ok": True, "note": "Not implemented"})
+
+
+@app.post("/api/import/qa_from_root")
+def import_qa_from_root(payload: ImportFromRootRequest) -> JSONResponse:
+    _require_loaded_dataset()
+    root = Path(payload.root_path).expanduser().resolve()
+    if not root.exists():
+        raise HTTPException(status_code=404, detail=f"Root path not found: {root}")
+
+    episodes = sorted(manager.episodes_df["episode_index"].unique())
+    episodes_updated = 0
+    qa_total = 0
+    missing_samples = 0
+
+    for ep_idx in episodes:
+        sample_dir = root / f"sample_{int(ep_idx):06d}"
+        if not sample_dir.exists():
+            missing_samples += 1
+            continue
+        jsonl_files = sorted(sample_dir.glob("*.jsonl"))
+        if not jsonl_files:
+            continue
+
+        qa_labels: list[dict[str, Any]] = []
+        for path in jsonl_files:
+            for obj in _parse_jsonl(path):
+                frame_idx = obj.get("frame_idx")
+                if frame_idx is None:
+                    continue
+                try:
+                    frame_idx_int = int(frame_idx)
+                except Exception:
+                    continue
+                qas = obj.get("qas", []) if isinstance(obj.get("qas"), list) else []
+                for qa in qas:
+                    if not isinstance(qa, dict):
+                        continue
+                    qa_type = str(qa.get("type", "")).strip()
+                    question = str(qa.get("question", "")).strip()
+                    answer = str(qa.get("answer", "")).strip()
+                    if not question or not answer:
+                        continue
+                    qa_labels.append({
+                        "frame_idx": frame_idx_int,
+                        "type": qa_type,
+                        "question": question,
+                        "answer": answer,
+                    })
+
+        if qa_labels:
+            qa_labels.sort(key=lambda x: int(x.get("frame_idx", 0)))
+            ann = manager.get_episode_annotations(int(ep_idx))
+            ann.qa_labels = qa_labels
+            episodes_updated += 1
+            qa_total += len(qa_labels)
+
+    manager._save_annotations()
+    return JSONResponse({
+        "ok": True,
+        "episodes_updated": episodes_updated,
+        "qa_labels": qa_total,
+        "missing_samples": missing_samples,
+    })
+
+
 class PushToHubRequest(BaseModel):
     hf_token: str
     push_in_place: bool = True
     new_repo_id: str | None = None
     private: bool = False
     commit_message: str = "Add annotations from LeRobot Annotate"
+
+
+class ImportFromRootRequest(BaseModel):
+    root_path: str
 
 
 @app.post("/api/push_to_hub")

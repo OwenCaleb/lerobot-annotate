@@ -50,6 +50,21 @@
         </div>
       </form>
       <div class="helper" id="connectHelper"></div>
+      <div class="import-root">
+        <h3>Import from Root</h3>
+        <div class="row">
+          <label class="grow">
+            Root path
+            <input id="importRootPath" type="text" placeholder="/path/to/root" />
+          </label>
+        </div>
+        <div class="row">
+          <button id="importSubtasksBtn" class="ghost" type="button" disabled>Load Subtasks from Root</button>
+          <button id="importHighLevelsBtn" class="ghost" type="button" disabled>Load High-level prompts from Root</button>
+          <button id="importQABtn" class="ghost" type="button" disabled>Load QA labeling from Root</button>
+        </div>
+        <div class="helper" id="importHelper"></div>
+      </div>
     </section>
 
     <section class="workspace" id="workspace">
@@ -81,6 +96,7 @@
         <div class="tabs">
           <button class="tab active" data-tab="subtasks">Subtasks</button>
           <button class="tab" data-tab="highlevels">High-level prompts</button>
+          <button class="tab" data-tab="qalabels">QA labeling</button>
         </div>
 
         <section class="tab-panel active" id="subtasksPanel">
@@ -149,6 +165,34 @@
             </div>
           </div>
           <div id="highLevelList" class="segment-list"></div>
+        </section>
+
+        <section class="tab-panel" id="qalabelsPanel">
+          <div class="segment-form">
+            <div class="row">
+              <label>
+                Frame index
+                <input id="qaFrameIdx" type="number" step="1" />
+              </label>
+              <label>
+                Type
+                <input id="qaType" type="text" placeholder="count" />
+              </label>
+              <label class="grow">
+                Question
+                <input id="qaQuestion" type="text" placeholder="How many objects are visible?" />
+              </label>
+            </div>
+            <div class="row">
+              <label class="grow">
+                Answer
+                <input id="qaAnswer" type="text" placeholder="10" />
+              </label>
+              <button id="qaSetFrame" class="ghost" type="button">Set frame from video</button>
+              <button id="addQaLabel" class="primary" type="button">Add QA</button>
+            </div>
+          </div>
+          <div id="qaLabelList" class="segment-list"></div>
         </section>
       </main>
     </section>

@@ -130,6 +130,11 @@ const localInput = document.getElementById('localInput');
 const revisionInput = document.getElementById('revisionInput');
 const videoKeySelect = document.getElementById('videoKeySelect');
 const connectHelper = document.getElementById('connectHelper');
+const importRootPath = document.getElementById('importRootPath');
+const importSubtasksBtn = document.getElementById('importSubtasksBtn');
+const importHighLevelsBtn = document.getElementById('importHighLevelsBtn');
+const importQABtn = document.getElementById('importQABtn');
+const importHelper = document.getElementById('importHelper');
 
 const workspace = document.getElementById('workspace');
 const episodeList = document.getElementById('episodeList');
@@ -161,6 +166,14 @@ const hlSetStart = document.getElementById('hlSetStart');
 const hlSetEnd = document.getElementById('hlSetEnd');
 const addHighLevel = document.getElementById('addHighLevel');
 const highLevelList = document.getElementById('highLevelList');
+
+const qaFrameIdx = document.getElementById('qaFrameIdx');
+const qaType = document.getElementById('qaType');
+const qaQuestion = document.getElementById('qaQuestion');
+const qaAnswer = document.getElementById('qaAnswer');
+const qaSetFrame = document.getElementById('qaSetFrame');
+const addQaLabel = document.getElementById('addQaLabel');
+const qaLabelList = document.getElementById('qaLabelList');
 
 const exportBtn = document.getElementById('exportBtn');
 const outputDir = document.getElementById('outputDir');
@@ -218,6 +231,11 @@ function currentTime() {
   return Number(episodeVideo.currentTime.toFixed(3));
 }
 
+function currentFrame() {
+  const fps = (state.dataset && state.dataset.fps) ? Number(state.dataset.fps) : 30;
+  return Math.round(currentTime() * fps);
+}
+
 function formatTimeWithMs(seconds) {
   // Format time as MM:SS.mmm for millisecond precision display
   if (!seconds && seconds !== 0) return '00:00.000';
@@ -254,11 +272,18 @@ function resetEpisodeForm() {
   hlSkill.value = '';
   hlScenario.value = '';
   hlResponse.value = '';
+  if (qaFrameIdx) qaFrameIdx.value = '';
+  if (qaType) qaType.value = '';
+  if (qaQuestion) qaQuestion.value = '';
+  if (qaAnswer) qaAnswer.value = '';
 }
 
 function getEpisodeAnnotations(epIdx) {
   if (!state.annotations[epIdx]) {
-    state.annotations[epIdx] = { subtasks: [], high_levels: [] };
+    state.annotations[epIdx] = { subtasks: [], high_levels: [], qa_labels: [] };
+  }
+  if (!state.annotations[epIdx].qa_labels) {
+    state.annotations[epIdx].qa_labels = [];
   }
   return state.annotations[epIdx];
 }
@@ -480,6 +505,64 @@ function renderHighLevels() {
   });
 }
 
+function renderQALabels() {
+  if (!qaLabelList) return;
+  qaLabelList.innerHTML = '';
+  if (state.currentEpisode == null) return;
+  const ann = getEpisodeAnnotations(state.currentEpisode);
+  ann.qa_labels.sort((a, b) => (a.frame_idx || 0) - (b.frame_idx || 0));
+
+  ann.qa_labels.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'qa-item';
+
+    const frameInput = document.createElement('input');
+    frameInput.type = 'number';
+    frameInput.step = '1';
+    frameInput.value = item.frame_idx;
+    frameInput.addEventListener('change', () => {
+      item.frame_idx = Number(frameInput.value);
+    });
+
+    const typeInput = document.createElement('input');
+    typeInput.type = 'text';
+    typeInput.value = item.type || '';
+    typeInput.addEventListener('change', () => {
+      item.type = typeInput.value;
+    });
+
+    const questionInput = document.createElement('input');
+    questionInput.type = 'text';
+    questionInput.value = item.question || '';
+    questionInput.addEventListener('change', () => {
+      item.question = questionInput.value;
+    });
+
+    const answerInput = document.createElement('input');
+    answerInput.type = 'text';
+    answerInput.value = item.answer || '';
+    answerInput.addEventListener('change', () => {
+      item.answer = answerInput.value;
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'ghost';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => {
+      ann.qa_labels.splice(idx, 1);
+      renderQALabels();
+    });
+
+    row.appendChild(frameInput);
+    row.appendChild(typeInput);
+    row.appendChild(questionInput);
+    row.appendChild(answerInput);
+    row.appendChild(deleteBtn);
+
+    qaLabelList.appendChild(row);
+  });
+}
+
 async function selectEpisode(epIdx) {
   state.currentEpisode = epIdx;
   episodeTitle.textContent = `Episode ${epIdx}`;
@@ -492,6 +575,7 @@ async function selectEpisode(epIdx) {
   state.annotations[epIdx] = {
     subtasks: data.subtasks || [],
     high_levels: data.high_levels || [],
+    qa_labels: data.qa_labels || [],
   };
 
   // The server now handles video trimming for concatenated videos
@@ -504,6 +588,7 @@ async function selectEpisode(epIdx) {
   renderEpisodes();
   renderSubtasks();
   renderHighLevels();
+  renderQALabels();
 }
 
 async function saveEpisode() {
@@ -513,6 +598,7 @@ async function saveEpisode() {
     episode_index: state.currentEpisode,
     subtasks: ann.subtasks,
     high_levels: ann.high_levels,
+    qa_labels: ann.qa_labels,
   };
   const res = await fetch(`/api/episodes/${state.currentEpisode}/annotations`, {
     method: 'POST',
@@ -557,6 +643,65 @@ connectForm.addEventListener('submit', async (event) => {
     setHelper(connectHelper, err.message);
   }
 });
+
+function updateImportButtons() {
+  const hasPath = importRootPath && importRootPath.value.trim() !== '';
+  if (importSubtasksBtn) importSubtasksBtn.disabled = !hasPath;
+  if (importHighLevelsBtn) importHighLevelsBtn.disabled = !hasPath;
+  if (importQABtn) importQABtn.disabled = !hasPath;
+}
+
+async function runImport(endpoint) {
+  if (!importRootPath) return;
+  const rootPath = importRootPath.value.trim();
+  if (!rootPath) return;
+  if (importHelper) importHelper.textContent = 'Importing...';
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root_path: rootPath }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Import failed');
+    }
+    if (importHelper) {
+      let msg = data.note ? data.note : 'Import completed.';
+      if (data.episodes_updated !== undefined) {
+        const extra = [];
+        if (data.segments !== undefined) extra.push(`segments: ${data.segments}`);
+        if (data.qa_labels !== undefined) extra.push(`qa: ${data.qa_labels}`);
+        if (data.missing_samples !== undefined) extra.push(`missing samples: ${data.missing_samples}`);
+        msg = `Episodes updated: ${data.episodes_updated}` + (extra.length ? ` (${extra.join(', ')})` : '');
+      }
+      importHelper.textContent = msg;
+    }
+    if (state.currentEpisode != null) {
+      await selectEpisode(state.currentEpisode);
+    }
+  } catch (err) {
+    if (importHelper) importHelper.textContent = err.message || 'Import failed';
+  }
+}
+
+if (importRootPath) {
+  importRootPath.addEventListener('input', updateImportButtons);
+  updateImportButtons();
+}
+
+if (importSubtasksBtn) {
+  importSubtasksBtn.addEventListener('click', () => runImport('/api/import/subtasks_from_root'));
+}
+
+if (importHighLevelsBtn) {
+  importHighLevelsBtn.addEventListener('click', () => runImport('/api/import/highlevels_from_root'));
+}
+
+if (importQABtn) {
+  importQABtn.addEventListener('click', () => runImport('/api/import/qa_from_root'));
+}
 
 function populateVideoKeys(keys, selected) {
   videoKeySelect.innerHTML = '';
@@ -625,12 +770,43 @@ addHighLevel.addEventListener('click', () => {
   hlRobot.value = '';
 });
 
+if (qaSetFrame) {
+  qaSetFrame.addEventListener('click', () => {
+    if (!qaFrameIdx) return;
+    qaFrameIdx.value = currentFrame();
+  });
+}
+
+if (addQaLabel) {
+  addQaLabel.addEventListener('click', () => {
+    if (state.currentEpisode == null) return;
+    const frameIdx = qaFrameIdx ? Number(qaFrameIdx.value) : NaN;
+    const qaTypeVal = qaType ? qaType.value.trim() : '';
+    const questionVal = qaQuestion ? qaQuestion.value.trim() : '';
+    const answerVal = qaAnswer ? qaAnswer.value.trim() : '';
+    if (Number.isNaN(frameIdx) || frameIdx < 0 || !questionVal || !answerVal) {
+      return;
+    }
+    const ann = getEpisodeAnnotations(state.currentEpisode);
+    ann.qa_labels.push({
+      frame_idx: frameIdx,
+      type: qaTypeVal,
+      question: questionVal,
+      answer: answerVal,
+    });
+    renderQALabels();
+    if (qaQuestion) qaQuestion.value = '';
+    if (qaAnswer) qaAnswer.value = '';
+  });
+}
+
 saveEpisodeBtn.addEventListener('click', () => saveEpisode());
 resetEpisodeBtn.addEventListener('click', () => {
   if (state.currentEpisode == null) return;
-  state.annotations[state.currentEpisode] = { subtasks: [], high_levels: [] };
+  state.annotations[state.currentEpisode] = { subtasks: [], high_levels: [], qa_labels: [] };
   renderSubtasks();
   renderHighLevels();
+  renderQALabels();
   renderTimeline();
 });
 
@@ -668,7 +844,8 @@ exportBtn.addEventListener('click', async () => {
   });
   const data = await res.json();
   if (res.ok) {
-    exportStatus.textContent = `Exported to ${data.output_dir} (subtasks: ${data.subtasks}, high-level: ${data.tasks_high_level})`;
+    const qaInfo = (data.qa_labels !== undefined) ? `, qa: ${data.qa_labels}` : '';
+    exportStatus.textContent = `Exported to ${data.output_dir} (subtasks: ${data.subtasks}, high-level: ${data.tasks_high_level}${qaInfo})`;
   } else {
     exportStatus.textContent = data.detail || 'Export failed';
   }
