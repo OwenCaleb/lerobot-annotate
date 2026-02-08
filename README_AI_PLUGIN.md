@@ -4,6 +4,7 @@
 
 1. **Subtask 标注**（时间段级别的子任务标签）
 2. **Fake VQA 标注**（将 episode 内的视觉片段转化为英文 VQA 式问答监督信号）
+3. **QA labeling**（帧级别问答标注：type / question / answer）
 
 该插件面向你的路线 B 目标：在不改 wall-oss 训练主框架的前提下，把 `lerobot-annotate` 的标注结果导出为 `lerobot_annotations.json`，用于后续混训或数据增强。
 
@@ -22,6 +23,12 @@
 * 输入：episode 视频 + 配置参数（Mode 2, Stride, Window, Window frames 等）
 * 输出：覆盖 episode 的英文 VQA 问答段落（user_prompt, robot_utterance），并写入 `high_levels`
 * 目标：生成类似 “图像问答” 的文本监督信号，服务于 VLA 混训时的语言分支
+
+### 3) QA labeling
+
+* 输入：单帧（frame_idx）+ 多条 QA
+* 输出：写入 `qa_labels`（每帧可多条）
+* 用途：生成帧级问答监督，导出时会落到 `meta/qa_labels.parquet` 并在数据文件增加 `vqa` 列
 
 ---
 
@@ -147,6 +154,7 @@ uvicorn app_ai:app --host 0.0.0.0 --port 7860
 
 * `Subtasks` 页签
 * `High-level prompts` 页签
+* `QA labeling` 页签
 
 可以切换 AI Mode（按钮或开关）。AI Mode 打开后会出现 AI 相关设置和生成按钮。
 
@@ -236,6 +244,11 @@ Object A is to the right of object B.
 
 在页面底部 `Export annotated dataset` 区域导出即可。
 
+导出产物包含：
+
+* `meta/qa_labels.parquet`：帧级 QA 结构化导出
+* `data/*.parquet` 增加 `vqa` 列（bool），含 QA 的帧为 1，否则为 0
+
 ---
 
 ## API 端点（调试用）
@@ -248,6 +261,15 @@ Object A is to the right of object B.
 
 * `POST /api/ai/fake_vqa`
   生成 high-level Fake VQA segments
+
+* `POST /api/import/subtasks_from_root`
+  从 root/sample_*/segments.json 导入 Subtasks
+
+* `POST /api/import/highlevels_from_root`
+  从 root/sample_*/cot_results.json 导入 High-level prompts
+
+* `POST /api/import/qa_from_root`
+  从 root/sample_*/**/*.jsonl 导入 QA labeling
 
 ---
 

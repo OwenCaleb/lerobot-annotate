@@ -143,6 +143,10 @@ class EpisodeAnnotationsPayload(BaseModel):
     qa_labels: list[SegmentQALabel] = []
 
 
+class ImportFromRootRequest(BaseModel):
+    root_path: str
+
+
 @dataclass
 class EpisodeAnnotations:
     subtasks: list[dict[str, Any]] = field(default_factory=list)
@@ -409,6 +413,8 @@ class DataManager:
     def export_dataset(self, output_dir: str | None = None, copy_videos: bool = False) -> dict[str, Any]:
         if self.dataset_root is None or self.info is None:
             raise HTTPException(status_code=400, detail="Dataset not loaded")
+
+        fps = float(self.info.get("fps", 30)) if self.info else 30.0
 
         if output_dir:
             out_root = Path(output_dir).expanduser().resolve()
@@ -943,10 +949,6 @@ class PushToHubRequest(BaseModel):
     new_repo_id: str | None = None
     private: bool = False
     commit_message: str = "Add annotations from LeRobot Annotate"
-
-
-class ImportFromRootRequest(BaseModel):
-    root_path: str
 
 
 @app.post("/api/push_to_hub")
