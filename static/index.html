@@ -54,13 +54,31 @@
         <h3>Import from Root</h3>
         <div class="row">
           <label class="grow">
-            Root path
-            <input id="importRootPath" type="text" placeholder="/path/to/root" />
+            Subtasks root path
+            <input id="importSubtasksRootPath" type="text" placeholder="/path/to/root" />
           </label>
+          <button id="importSubtasksBtn" class="ghost" type="button" disabled>Load Subtasks from Root</button>
         </div>
         <div class="row">
-          <button id="importSubtasksBtn" class="ghost" type="button" disabled>Load Subtasks from Root</button>
+          <label class="grow">
+            High-level prompts root path
+            <input id="importHighLevelsRootPath" type="text" placeholder="/path/to/root" />
+          </label>
+          <label>
+            Scenario type
+            <input id="importHighLevelsScenarioType" type="text" placeholder="vqa" />
+          </label>
+          <label>
+            Response type
+            <input id="importHighLevelsResponseType" type="text" placeholder="answer" />
+          </label>
           <button id="importHighLevelsBtn" class="ghost" type="button" disabled>Load High-level prompts from Root</button>
+        </div>
+        <div class="row">
+          <label class="grow">
+            QA labeling root path
+            <input id="importQaRootPath" type="text" placeholder="/path/to/root" />
+          </label>
           <button id="importQABtn" class="ghost" type="button" disabled>Load QA labeling from Root</button>
         </div>
         <div class="helper" id="importHelper"></div>

@@ -130,7 +130,11 @@ const localInput = document.getElementById('localInput');
 const revisionInput = document.getElementById('revisionInput');
 const videoKeySelect = document.getElementById('videoKeySelect');
 const connectHelper = document.getElementById('connectHelper');
-const importRootPath = document.getElementById('importRootPath');
+const importSubtasksRootPath = document.getElementById('importSubtasksRootPath');
+const importHighLevelsRootPath = document.getElementById('importHighLevelsRootPath');
+const importHighLevelsScenarioType = document.getElementById('importHighLevelsScenarioType');
+const importHighLevelsResponseType = document.getElementById('importHighLevelsResponseType');
+const importQaRootPath = document.getElementById('importQaRootPath');
 const importSubtasksBtn = document.getElementById('importSubtasksBtn');
 const importHighLevelsBtn = document.getElementById('importHighLevelsBtn');
 const importQABtn = document.getElementById('importQABtn');
@@ -645,23 +649,22 @@ connectForm.addEventListener('submit', async (event) => {
 });
 
 function updateImportButtons() {
-  const hasPath = importRootPath && importRootPath.value.trim() !== '';
-  if (importSubtasksBtn) importSubtasksBtn.disabled = !hasPath;
-  if (importHighLevelsBtn) importHighLevelsBtn.disabled = !hasPath;
-  if (importQABtn) importQABtn.disabled = !hasPath;
+  const hasSubtasksPath = importSubtasksRootPath && importSubtasksRootPath.value.trim() !== '';
+  const hasHighLevelsPath = importHighLevelsRootPath && importHighLevelsRootPath.value.trim() !== '';
+  const hasQaPath = importQaRootPath && importQaRootPath.value.trim() !== '';
+  if (importSubtasksBtn) importSubtasksBtn.disabled = !hasSubtasksPath;
+  if (importHighLevelsBtn) importHighLevelsBtn.disabled = !hasHighLevelsPath;
+  if (importQABtn) importQABtn.disabled = !hasQaPath;
 }
 
-async function runImport(endpoint) {
-  if (!importRootPath) return;
-  const rootPath = importRootPath.value.trim();
-  if (!rootPath) return;
+async function runImport(endpoint, payload) {
   if (importHelper) importHelper.textContent = 'Importing...';
 
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ root_path: rootPath }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -686,21 +689,39 @@ async function runImport(endpoint) {
   }
 }
 
-if (importRootPath) {
-  importRootPath.addEventListener('input', updateImportButtons);
-  updateImportButtons();
-}
+if (importSubtasksRootPath) importSubtasksRootPath.addEventListener('input', updateImportButtons);
+if (importHighLevelsRootPath) importHighLevelsRootPath.addEventListener('input', updateImportButtons);
+if (importQaRootPath) importQaRootPath.addEventListener('input', updateImportButtons);
+updateImportButtons();
 
 if (importSubtasksBtn) {
-  importSubtasksBtn.addEventListener('click', () => runImport('/api/import/subtasks_from_root'));
+  importSubtasksBtn.addEventListener('click', () => {
+    const rootPath = importSubtasksRootPath ? importSubtasksRootPath.value.trim() : '';
+    if (!rootPath) return;
+    runImport('/api/import/subtasks_from_root', { root_path: rootPath });
+  });
 }
 
 if (importHighLevelsBtn) {
-  importHighLevelsBtn.addEventListener('click', () => runImport('/api/import/highlevels_from_root'));
+  importHighLevelsBtn.addEventListener('click', () => {
+    const rootPath = importHighLevelsRootPath ? importHighLevelsRootPath.value.trim() : '';
+    if (!rootPath) return;
+    const scenarioType = importHighLevelsScenarioType ? importHighLevelsScenarioType.value.trim() : '';
+    const responseType = importHighLevelsResponseType ? importHighLevelsResponseType.value.trim() : '';
+    runImport('/api/import/highlevels_from_root', {
+      root_path: rootPath,
+      scenario_type: scenarioType || null,
+      response_type: responseType || null,
+    });
+  });
 }
 
 if (importQABtn) {
-  importQABtn.addEventListener('click', () => runImport('/api/import/qa_from_root'));
+  importQABtn.addEventListener('click', () => {
+    const rootPath = importQaRootPath ? importQaRootPath.value.trim() : '';
+    if (!rootPath) return;
+    runImport('/api/import/qa_from_root', { root_path: rootPath });
+  });
 }
 
 function populateVideoKeys(keys, selected) {

@@ -147,6 +147,12 @@ class ImportFromRootRequest(BaseModel):
     root_path: str
 
 
+class ImportHighLevelsRequest(BaseModel):
+    root_path: str
+    scenario_type: str | None = None
+    response_type: str | None = None
+
+
 @dataclass
 class EpisodeAnnotations:
     subtasks: list[dict[str, Any]] = field(default_factory=list)
@@ -814,13 +820,17 @@ def import_subtasks_from_root(payload: ImportFromRootRequest) -> JSONResponse:
 
 
 @app.post("/api/import/highlevels_from_root")
-def import_highlevels_from_root(payload: ImportFromRootRequest) -> JSONResponse:
+def import_highlevels_from_root(payload: ImportHighLevelsRequest) -> JSONResponse:
     _require_loaded_dataset()
     root = Path(payload.root_path).expanduser().resolve()
     if not root.exists():
         raise HTTPException(status_code=404, detail=f"Root path not found: {root}")
 
     fps = float(manager.info.get("fps", 30)) if manager.info else 30.0
+    if fps <= 0:
+        fps = 30.0
+    scenario_type = (payload.scenario_type or "").strip() or None
+    response_type = (payload.response_type or "").strip() or None
     episodes = sorted(manager.episodes_df["episode_index"].unique())
     episodes_updated = 0
     segments_total = 0
@@ -842,8 +852,8 @@ def import_highlevels_from_root(payload: ImportFromRootRequest) -> JSONResponse:
         for seg in segments_in:
             if not isinstance(seg, dict):
                 continue
-            start_frame = seg.get("start_frame")
-            end_frame = seg.get("end_frame")
+            start_frame = seg.get("start_frame", seg.get("start"))
+            end_frame = seg.get("end_frame", seg.get("end"))
             instruction = str(seg.get("instruction", "")).strip()
             cot = str(seg.get("cot", "")).strip()
             if start_frame is None or end_frame is None or not instruction:
@@ -861,8 +871,8 @@ def import_highlevels_from_root(payload: ImportFromRootRequest) -> JSONResponse:
                 "user_prompt": instruction,
                 "robot_utterance": cot,
                 "skill": None,
-                "scenario_type": None,
-                "response_type": None,
+                "scenario_type": scenario_type,
+                "response_type": response_type,
             })
 
         if segments:

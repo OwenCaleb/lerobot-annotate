@@ -251,6 +251,98 @@ Object A is to the right of object B.
 
 ---
 
+## Import from Root 目录规范（精确路径）
+
+三类导入互相独立，每个按钮对应一个根目录。目录命名按 episode 索引映射：
+
+```
+root/
+  sample_000000/
+  sample_000001/
+  sample_000002/
+  ...
+```
+
+### 1) Load Subtasks from Root
+
+每个 episode 使用一个 `segments.json`：
+
+```
+root/sample_000000/segments.json
+```
+
+结构：
+
+```json
+{
+  "sample_id": "sample_000000",
+  "nframes": 809,
+  "segments": [
+    {
+      "seg_id": 0,
+      "start_frame": 0,
+      "end_frame": 137,
+      "instruction": "Place the green and white toy in the right_dark_brown_basket",
+      "confidence": 1.0
+    }
+  ]
+}
+```
+
+### 2) Load High-level prompts from Root
+
+每个 episode 使用一个 `cot_results.json`：
+
+```
+root/sample_000000/cot_results.json
+```
+
+结构：
+
+```json
+{
+  "sample_id": "sample_000000",
+  "segments": [
+    {
+      "seg_id": 0,
+      "instruction": "Place the green and white toy in the right_dark_brown_basket",
+      "start_frame": 0,
+      "end_frame": 137,
+      "cot": "The green and white toy is located on the right side of the table ..."
+    }
+  ]
+}
+```
+
+前端可额外填写：
+
+* `Scenario type`
+* `Response type`
+
+它们会写入所有导入段落的同名字段。
+
+### 3) Load QA labeling from Root
+
+每个 episode 目录下包含若干 `*.jsonl`：
+
+```
+root/sample_000000/attribute.jsonl
+root/sample_000000/count.jsonl
+root/sample_000000/existence.jsonl
+root/sample_000000/manipulation.jsonl
+root/sample_000000/spatial.jsonl
+```
+
+每行一个 JSON：
+
+```json
+{"frame_id": "000000", "frame_idx": 0, "qas": [{"type": "count", "question": "How many graspable objects are visible?", "answer": "10"}]}
+```
+
+系统只对齐 `frame_idx`，忽略 `frame_id`。
+
+---
+
 ## API 端点（调试用）
 
 * `GET /api/ai/status`
