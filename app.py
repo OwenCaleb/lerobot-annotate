@@ -813,7 +813,65 @@ def import_highlevels_from_root(payload: ImportFromRootRequest) -> JSONResponse:
     root = Path(payload.root_path).expanduser().resolve()
     if not root.exists():
         raise HTTPException(status_code=404, detail=f"Root path not found: {root}")
-    return JSONResponse({"ok": True, "note": "Not implemented"})
+
+    fps = float(manager.info.get("fps", 30)) if manager.info else 30.0
+    episodes = sorted(manager.episodes_df["episode_index"].unique())
+    episodes_updated = 0
+    segments_total = 0
+    missing_samples = 0
+
+    for ep_idx in episodes:
+        sample_dir = root / f"sample_{int(ep_idx):06d}"
+        cot_path = sample_dir / "cot_results.json"
+        if not cot_path.exists():
+            missing_samples += 1
+            continue
+        try:
+            data = json.loads(cot_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        segments_in = data.get("segments", []) if isinstance(data, dict) else []
+        segments: list[dict[str, Any]] = []
+        for seg in segments_in:
+            if not isinstance(seg, dict):
+                continue
+            start_frame = seg.get("start_frame")
+            end_frame = seg.get("end_frame")
+            instruction = str(seg.get("instruction", "")).strip()
+            cot = str(seg.get("cot", "")).strip()
+            if start_frame is None or end_frame is None or not instruction:
+                continue
+            try:
+                start = float(start_frame) / fps
+                end = float(end_frame) / fps
+            except Exception:
+                continue
+            if end <= start:
+                continue
+            segments.append({
+                "start": round(start, 3),
+                "end": round(end, 3),
+                "user_prompt": instruction,
+                "robot_utterance": cot,
+                "skill": None,
+                "scenario_type": None,
+                "response_type": None,
+            })
+
+        if segments:
+            ann = manager.get_episode_annotations(int(ep_idx))
+            ann.high_levels = segments
+            episodes_updated += 1
+            segments_total += len(segments)
+
+    manager._save_annotations()
+    return JSONResponse({
+        "ok": True,
+        "episodes_updated": episodes_updated,
+        "segments": segments_total,
+        "missing_samples": missing_samples,
+    })
 
 
 @app.post("/api/import/qa_from_root")
