@@ -138,6 +138,7 @@ class SegmentQALabel(BaseModel):
 
 class EpisodeAnnotationsPayload(BaseModel):
     episode_index: int
+    instruction: str | None = None
     subtasks: list[SegmentSubtask] = []
     high_levels: list[SegmentHighLevel] = []
     qa_labels: list[SegmentQALabel] = []
@@ -153,8 +154,15 @@ class ImportHighLevelsRequest(BaseModel):
     response_type: str | None = None
 
 
+class BulkInstructionRequest(BaseModel):
+    instruction: str
+    episode_indices: list[int] | None = None
+    overwrite_non_empty: bool = False
+
+
 @dataclass
 class EpisodeAnnotations:
+    instruction: str | None = None
     subtasks: list[dict[str, Any]] = field(default_factory=list)
     high_levels: list[dict[str, Any]] = field(default_factory=list)
     qa_labels: list[dict[str, Any]] = field(default_factory=list)
@@ -171,6 +179,18 @@ class DataManager:
         self.video_key: str | None = None
         self.annotations: dict[int, EpisodeAnnotations] = {}
         self.annotations_path: Path | None = None
+        self.INVALID_INSTRUCTION_VALUES = {"", "null", "none", "n/a", "na"}
+
+    def normalize_instruction(self, value: Any) -> str | None:
+        if value is None:
+            return None
+        # Handle list/tuple - extract first element
+        if isinstance(value, (list, tuple)) and value:
+            value = value[0]
+        text = str(value).strip()
+        if text.lower() in self.INVALID_INSTRUCTION_VALUES:
+            return None
+        return text
 
     def load_dataset(self, req: DatasetLoadRequest) -> dict[str, Any]:
         if req.source not in {"hf", "local"}:
@@ -248,7 +268,11 @@ class DataManager:
             data = json.loads(self.annotations_path.read_text())
             for ep_str, payload in data.get("episodes", {}).items():
                 ep_idx = int(ep_str)
+                instruction = self.normalize_instruction(payload.get("instruction"))
+                if instruction is None:
+                    instruction = self._infer_episode_instruction(ep_idx)
                 self.annotations[ep_idx] = EpisodeAnnotations(
+                    instruction=instruction,
                     subtasks=payload.get("subtasks", []),
                     high_levels=payload.get("high_levels", []),
                     qa_labels=payload.get("qa_labels", []),
@@ -267,7 +291,27 @@ class DataManager:
                     for s in skills
                     if "start" in s and "end" in s
                 ]
-                self.annotations[ep_idx] = EpisodeAnnotations(subtasks=subtasks, high_levels=[])
+                self.annotations[ep_idx] = EpisodeAnnotations(
+                    instruction=self._infer_episode_instruction(ep_idx),
+                    subtasks=subtasks,
+                    high_levels=[],
+                )
+
+    def _infer_episode_instruction(self, episode_index: int) -> str | None:
+        if self.episodes_df is None:
+            return None
+        row = self.episodes_df[self.episodes_df["episode_index"] == episode_index]
+        if row.empty:
+            return None
+        item = row.iloc[0]
+        tasks_val = item.get("tasks")
+        if isinstance(tasks_val, list) and tasks_val:
+            return self.normalize_instruction(tasks_val[0])
+        if isinstance(tasks_val, str):
+            return self.normalize_instruction(tasks_val)
+        if tasks_val is not None and pd.notna(tasks_val):
+            return self.normalize_instruction(tasks_val)
+        return None
 
     def _save_annotations(self) -> None:
         if not self.annotations_path:
@@ -276,6 +320,7 @@ class DataManager:
             "version": 1,
             "episodes": {
                 str(ep_idx): {
+                    "instruction": ann.instruction,
                     "subtasks": ann.subtasks,
                     "high_levels": ann.high_levels,
                     "qa_labels": ann.qa_labels,
@@ -320,6 +365,7 @@ class DataManager:
             "fps": fps,
             "video_keys": self._get_video_keys(),
             "selected_video_key": video_key,
+            "instruction_overview": self.build_instruction_overview(),
             "episodes": episodes,
         }
 
@@ -405,16 +451,164 @@ class DataManager:
 
     def get_episode_annotations(self, episode_index: int) -> EpisodeAnnotations:
         if episode_index not in self.annotations:
-            self.annotations[episode_index] = EpisodeAnnotations()
+            self.annotations[episode_index] = EpisodeAnnotations(
+                instruction=self._infer_episode_instruction(episode_index)
+            )
         return self.annotations[episode_index]
 
+    def get_episode_instruction_status(self, episode_index: int) -> tuple[str | None, str]:
+        ann = self.annotations.get(episode_index)
+        ann_instruction = self.normalize_instruction(ann.instruction) if ann else None
+        if ann_instruction:
+            return ann_instruction, "annotations"
+
+        dataset_instruction = self._infer_episode_instruction(episode_index)
+        if dataset_instruction:
+            return dataset_instruction, "dataset_tasks"
+
+        return None, "missing"
+
+    def build_instruction_overview(self) -> dict[str, int]:
+        if self.episodes_df is None:
+            return {
+                "annotations": 0,
+                "dataset_tasks": 0,
+                "missing": 0,
+                "unique_instructions": 0,
+            }
+
+        counts = {"annotations": 0, "dataset_tasks": 0, "missing": 0}
+        unique_instructions: set[str] = set()
+        for ep_idx in sorted(self.episodes_df["episode_index"].unique()):
+            instruction, source = self.get_episode_instruction_status(int(ep_idx))
+            counts[source] = counts.get(source, 0) + 1
+            if instruction:
+                unique_instructions.add(instruction)
+
+        return {
+            "annotations": counts["annotations"],
+            "dataset_tasks": counts["dataset_tasks"],
+            "missing": counts["missing"],
+            "unique_instructions": len(unique_instructions),
+        }
+
     def set_episode_annotations(self, payload: EpisodeAnnotationsPayload) -> None:
+        instruction = self.normalize_instruction(payload.instruction)
+        if instruction is None:
+            instruction = self._infer_episode_instruction(payload.episode_index)
         self.annotations[payload.episode_index] = EpisodeAnnotations(
+            instruction=instruction,
             subtasks=[seg.dict() for seg in payload.subtasks],
             high_levels=[seg.dict() for seg in payload.high_levels],
             qa_labels=[seg.dict() for seg in payload.qa_labels],
         )
         self._save_annotations()
+
+    def set_instruction_bulk(
+        self,
+        instruction: str,
+        episode_indices: list[int] | None = None,
+        overwrite_non_empty: bool = True,
+    ) -> int:
+        if self.episodes_df is None:
+            raise HTTPException(status_code=400, detail="Dataset not loaded")
+
+        text = self.normalize_instruction(instruction)
+        if not text:
+            raise HTTPException(status_code=400, detail="instruction cannot be empty")
+
+        if episode_indices is None:
+            target = [int(x) for x in sorted(self.episodes_df["episode_index"].unique())]
+        else:
+            target = [int(x) for x in episode_indices]
+
+        updated = 0
+        for ep_idx in target:
+            ann = self.get_episode_annotations(ep_idx)
+            ann.instruction = text
+            updated += 1
+
+        self._save_annotations()
+        return updated
+
+    def _read_existing_tasks_map(self) -> dict[int, str]:
+        if self.dataset_root is None:
+            return {}
+        tasks_root = self.dataset_root / "meta" / "tasks"
+        if not tasks_root.exists():
+            return {}
+
+        files = sorted(tasks_root.rglob("*.parquet"))
+        if not files:
+            return {}
+
+        df = pd.concat([pd.read_parquet(path) for path in files], ignore_index=False)
+        if "task_index" not in df.columns:
+            return {}
+
+        out: dict[int, str] = {}
+        for idx, row in df.iterrows():
+            try:
+                task_index = int(row["task_index"])
+            except Exception:
+                continue
+            task_text = str(idx).strip()
+            if task_text:
+                out[task_index] = task_text
+        return dict(sorted(out.items(), key=lambda item: item[0]))
+
+    def _build_task_mapping(self) -> tuple[dict[int, str], dict[str, int], dict[int, str]]:
+        assert self.episodes_df is not None
+        existing_index_to_task = self._read_existing_tasks_map()
+        task_to_index = {task: idx for idx, task in existing_index_to_task.items()}
+        next_index = max(existing_index_to_task.keys(), default=-1) + 1
+
+        episode_instruction: dict[int, str] = {}
+        for ep_idx in sorted(self.episodes_df["episode_index"].unique()):
+            ann = self.get_episode_annotations(int(ep_idx))
+            text = self.normalize_instruction(ann.instruction if ann else None) or ""
+            if not text:
+                inferred = self._infer_episode_instruction(int(ep_idx))
+                text = self.normalize_instruction(inferred) or ""
+            if not text:
+                text = "teleop"
+            episode_instruction[int(ep_idx)] = text
+            if text not in task_to_index:
+                task_to_index[text] = next_index
+                existing_index_to_task[next_index] = text
+                next_index += 1
+
+        index_to_task = dict(sorted(existing_index_to_task.items(), key=lambda item: item[0]))
+        return index_to_task, task_to_index, episode_instruction
+
+    def _write_tasks_parquet(self, dst_meta: Path, index_to_task: dict[int, str]) -> int:
+        tasks_dir = dst_meta / "tasks" / "chunk-000"
+        tasks_dir.mkdir(parents=True, exist_ok=True)
+        tasks_path = tasks_dir / "file-000.parquet"
+        flat_tasks_path = dst_meta / "tasks.parquet"
+
+        rows = []
+        idx_values = []
+        for task_index, task in sorted(index_to_task.items(), key=lambda item: item[0]):
+            idx_values.append(task)
+            rows.append({"task_index": int(task_index)})
+
+        df = pd.DataFrame(rows, index=idx_values)
+        if not df.empty:
+            df.index.name = "task"
+        df.to_parquet(tasks_path, engine="pyarrow", compression="snappy")
+        df.to_parquet(flat_tasks_path, engine="pyarrow", compression="snappy")
+        return len(df)
+
+    def _rewrite_episode_tasks(self, out_root: Path, episode_instruction: dict[int, str]) -> None:
+        episodes_root = out_root / "meta" / "episodes"
+        files = sorted(episodes_root.rglob("*.parquet"))
+        for path in files:
+            df = pd.read_parquet(path)
+            if "episode_index" not in df.columns:
+                continue
+            df["tasks"] = df["episode_index"].map(lambda x: [episode_instruction.get(int(x), "teleop")])
+            df.to_parquet(path, engine="pyarrow", compression="snappy", index=False)
 
     def export_dataset(self, output_dir: str | None = None, copy_videos: bool = False) -> dict[str, Any]:
         if self.dataset_root is None or self.info is None:
@@ -441,6 +635,13 @@ class DataManager:
         subtasks_df, subtask_map = build_subtasks_dataframe(self.annotations)
         tasks_df, task_map = build_high_level_dataframe(self.annotations)
         qa_df = build_qa_labels_dataframe(self.annotations, fps)
+        index_to_task, task_to_index, episode_instruction = self._build_task_mapping()
+
+        tasks_root = dst_meta / "tasks"
+        if tasks_root.exists():
+            shutil.rmtree(tasks_root)
+        tasks_count = self._write_tasks_parquet(dst_meta, index_to_task)
+        self._rewrite_episode_tasks(out_root, episode_instruction)
 
         if not subtasks_df.empty:
             subtasks_df.to_parquet(dst_meta / "subtasks.parquet", engine="pyarrow", compression="snappy")
@@ -479,9 +680,15 @@ class DataManager:
             dst_path.parent.mkdir(parents=True, exist_ok=True)
 
             df = pd.read_parquet(src_path)
+            if "episode_index" not in df.columns:
+                raise HTTPException(status_code=400, detail=f"Missing episode_index column in {src_path}")
             df["subtask_index"] = -1
             df["task_index_high_level"] = -1
             df["vqa"] = 0
+            if "task_index" in df.columns:
+                df["task_index"] = df["episode_index"].map(
+                    lambda x: int(task_to_index.get(episode_instruction.get(int(x), "teleop"), -1))
+                )
 
             for ep_idx in df["episode_index"].unique():
                 ann = self.annotations.get(int(ep_idx))
@@ -530,6 +737,7 @@ class DataManager:
 
         return {
             "output_dir": str(out_root),
+            "tasks": tasks_count,
             "subtasks": len(subtasks_df),
             "tasks_high_level": len(tasks_df),
             "qa_labels": len(qa_df),
@@ -710,8 +918,11 @@ def dataset_info() -> JSONResponse:
 @app.get("/api/episodes/{episode_index}/annotations")
 def get_annotations(episode_index: int) -> JSONResponse:
     ann = manager.get_episode_annotations(episode_index)
+    instruction, instruction_source = manager.get_episode_instruction_status(episode_index)
     return JSONResponse({
         "episode_index": episode_index,
+        "instruction": instruction,
+        "instruction_source": instruction_source,
         "subtasks": ann.subtasks,
         "high_levels": ann.high_levels,
         "qa_labels": ann.qa_labels,
@@ -724,6 +935,17 @@ def set_annotations(episode_index: int, payload: EpisodeAnnotationsPayload) -> J
         raise HTTPException(status_code=400, detail="Episode index mismatch")
     manager.set_episode_annotations(payload)
     return JSONResponse({"ok": True})
+
+
+@app.post("/api/instructions/apply")
+def apply_instruction(payload: BulkInstructionRequest) -> JSONResponse:
+    _require_loaded_dataset()
+    updated = manager.set_instruction_bulk(
+        instruction=payload.instruction,
+        episode_indices=payload.episode_indices,
+        overwrite_non_empty=payload.overwrite_non_empty,
+    )
+    return JSONResponse({"ok": True, "updated": updated})
 
 
 @app.post("/api/export")
@@ -1193,10 +1415,11 @@ def stream_video(episode_index: int, request: Request, video_key: str | None = N
             "Content-Range": f"bytes {start}-{end}/{file_size}",
             "Accept-Ranges": "bytes",
             "Content-Length": str(length),
+            "Connection": "close",
         }
         return StreamingResponse(iterfile(), status_code=206, media_type="video/mp4", headers=headers)
 
-    return FileResponse(path, media_type="video/mp4")
+    return FileResponse(path, media_type="video/mp4", headers={"Connection": "close"})
 
 
 def get_video_duration(video_path: Path) -> float:

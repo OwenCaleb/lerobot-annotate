@@ -147,6 +147,9 @@ const episodeTitle = document.getElementById('episodeTitle');
 const episodeMeta = document.getElementById('episodeMeta');
 const episodeVideo = document.getElementById('episodeVideo');
 const timeline = document.getElementById('timeline');
+const episodeInstruction = document.getElementById('episodeInstruction');
+const applyInstructionAll = document.getElementById('applyInstructionAll');
+const instructionHelper = document.getElementById('instructionHelper');
 
 const saveEpisodeBtn = document.getElementById('saveEpisode');
 const resetEpisodeBtn = document.getElementById('resetEpisode');
@@ -210,7 +213,21 @@ const state = {
   currentEpisode: null,
   currentEpisodeData: null, // Store the full episode data including video timing
   annotations: {},
+  annotationMeta: {},
 };
+
+let activeEpisodeRequest = null;
+
+function releaseCurrentVideoConnection() {
+  try {
+    episodeVideo.pause();
+  } catch (e) {
+    // Ignore pause errors for detached media elements.
+  }
+  episodeVideo.removeAttribute('src');
+  // Force browser to abort any in-flight media fetch for the previous src.
+  episodeVideo.load();
+}
 
 function setStatus(text, ok = false) {
   statusEl.textContent = text;
@@ -284,12 +301,32 @@ function resetEpisodeForm() {
 
 function getEpisodeAnnotations(epIdx) {
   if (!state.annotations[epIdx]) {
-    state.annotations[epIdx] = { subtasks: [], high_levels: [], qa_labels: [] };
+    state.annotations[epIdx] = { instruction: null, subtasks: [], high_levels: [], qa_labels: [] };
+  }
+  if (state.annotations[epIdx].instruction === undefined) {
+    state.annotations[epIdx].instruction = null;
   }
   if (!state.annotations[epIdx].qa_labels) {
     state.annotations[epIdx].qa_labels = [];
   }
   return state.annotations[epIdx];
+}
+
+function renderInstruction() {
+  if (!episodeInstruction || state.currentEpisode == null) return;
+  const ann = getEpisodeAnnotations(state.currentEpisode);
+  episodeInstruction.value = ann.instruction || '';
+  const meta = state.annotationMeta[state.currentEpisode] || {};
+  const source = meta.instruction_source || 'missing';
+  if (instructionHelper) {
+    if (source === 'annotations') {
+      instructionHelper.textContent = 'Current instruction source: lerobot_annotations.json';
+    } else if (source === 'dataset_tasks') {
+      instructionHelper.textContent = 'Current instruction source: dataset tasks (from step-1 output)';
+    } else {
+      instructionHelper.textContent = 'Current instruction source: missing';
+    }
+  }
 }
 
 function renderEpisodes() {
@@ -568,18 +605,43 @@ function renderQALabels() {
 }
 
 async function selectEpisode(epIdx) {
+  if (activeEpisodeRequest) {
+    activeEpisodeRequest.abort();
+  }
+  const controller = new AbortController();
+  activeEpisodeRequest = controller;
+
+  releaseCurrentVideoConnection();
+
   state.currentEpisode = epIdx;
   episodeTitle.textContent = `Episode ${epIdx}`;
   const ep = state.episodes.find(e => e.episode_index === epIdx);
   state.currentEpisodeData = ep || null;
   episodeMeta.textContent = ep ? `${ep.length} frames • ${formatDuration(ep.duration)}` : '';
 
-  const res = await fetch(`/api/episodes/${epIdx}/annotations`);
-  const data = await res.json();
+  let data;
+  try {
+    const res = await fetch(`/api/episodes/${epIdx}/annotations`, { signal: controller.signal });
+    data = await res.json();
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      return;
+    }
+    throw err;
+  }
+
+  if (controller.signal.aborted || activeEpisodeRequest !== controller) {
+    return;
+  }
+
   state.annotations[epIdx] = {
+    instruction: data.instruction || null,
     subtasks: data.subtasks || [],
     high_levels: data.high_levels || [],
     qa_labels: data.qa_labels || [],
+  };
+  state.annotationMeta[epIdx] = {
+    instruction_source: data.instruction_source || 'missing',
   };
 
   // The server now handles video trimming for concatenated videos
@@ -587,12 +649,18 @@ async function selectEpisode(epIdx) {
   const videoUrl = `/api/video/${epIdx}?video_key=${encodeURIComponent(state.dataset.selected_video_key)}`;
   console.log(`Loading episode ${epIdx} video`);
   episodeVideo.src = videoUrl;
+  episodeVideo.load();
   
   resetEpisodeForm();
+  renderInstruction();
   renderEpisodes();
   renderSubtasks();
   renderHighLevels();
   renderQALabels();
+
+  if (activeEpisodeRequest === controller) {
+    activeEpisodeRequest = null;
+  }
 }
 
 async function saveEpisode() {
@@ -600,6 +668,7 @@ async function saveEpisode() {
   const ann = getEpisodeAnnotations(state.currentEpisode);
   const payload = {
     episode_index: state.currentEpisode,
+    instruction: ann.instruction || null,
     subtasks: ann.subtasks,
     high_levels: ann.high_levels,
     qa_labels: ann.qa_labels,
@@ -638,7 +707,9 @@ connectForm.addEventListener('submit', async (event) => {
     state.dataset = data;
     state.episodes = data.episodes || [];
     setStatus(`Loaded ${data.repo_id || data.root}`, true);
-    setHelper(connectHelper, `Loaded ${state.episodes.length} episodes.`, true);
+    const overview = data.instruction_overview || {};
+    const info = `instr status -> annotations: ${overview.annotations || 0}, dataset: ${overview.dataset_tasks || 0}, missing: ${overview.missing || 0}, unique: ${overview.unique_instructions || 0}`;
+    setHelper(connectHelper, `Loaded ${state.episodes.length} episodes. ${info}`, true);
     workspace.style.display = 'grid';
     populateVideoKeys(data.video_keys, data.selected_video_key);
     renderEpisodes();
@@ -821,10 +892,60 @@ if (addQaLabel) {
   });
 }
 
+if (episodeInstruction) {
+  episodeInstruction.addEventListener('input', () => {
+    if (state.currentEpisode == null) return;
+    const ann = getEpisodeAnnotations(state.currentEpisode);
+    const text = episodeInstruction.value.trim();
+    ann.instruction = text || null;
+  });
+}
+
+if (applyInstructionAll) {
+  applyInstructionAll.addEventListener('click', async () => {
+    if (state.currentEpisode == null || !episodeInstruction) return;
+    const text = episodeInstruction.value.trim();
+    if (!text) {
+      if (instructionHelper) instructionHelper.textContent = 'Please input a non-empty instruction first.';
+      return;
+    }
+    if (instructionHelper) instructionHelper.textContent = 'Applying instruction to all episodes...';
+    try {
+      const res = await fetch('/api/instructions/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instruction: text,
+          overwrite_non_empty: false,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Failed to apply instruction');
+      }
+
+      // Keep local cache consistent with server updates.
+      for (const ep of state.episodes) {
+        const ann = getEpisodeAnnotations(ep.episode_index);
+        const meta = state.annotationMeta[ep.episode_index] || {};
+        const source = meta.instruction_source || 'missing';
+        if (source === 'missing') {
+          ann.instruction = text;
+          state.annotationMeta[ep.episode_index] = { instruction_source: 'annotations' };
+        }
+      }
+      if (instructionHelper) instructionHelper.textContent = `Applied to ${data.updated} episodes (filled missing only).`;
+    } catch (err) {
+      if (instructionHelper) instructionHelper.textContent = err.message || 'Apply failed';
+    }
+  });
+}
+
 saveEpisodeBtn.addEventListener('click', () => saveEpisode());
 resetEpisodeBtn.addEventListener('click', () => {
   if (state.currentEpisode == null) return;
-  state.annotations[state.currentEpisode] = { subtasks: [], high_levels: [], qa_labels: [] };
+  state.annotations[state.currentEpisode] = { instruction: null, subtasks: [], high_levels: [], qa_labels: [] };
+  renderInstruction();
   renderSubtasks();
   renderHighLevels();
   renderQALabels();

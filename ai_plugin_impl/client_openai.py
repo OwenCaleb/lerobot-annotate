@@ -6,12 +6,11 @@ Works with vLLM OpenAI server and similar /v1/chat/completions endpoints.
 
 from __future__ import annotations
 
-import json
-import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import requests
+from requests.adapters import HTTPAdapter
 
 
 @dataclass
@@ -20,6 +19,12 @@ class OpenAIChatClient:
     api_key: str
     model: str
     timeout_s: int = 120
+
+    def __post_init__(self) -> None:
+        self._session = requests.Session()
+        adapter = HTTPAdapter(pool_connections=8, pool_maxsize=32)
+        self._session.mount("http://", adapter)
+        self._session.mount("https://", adapter)
 
     def chat(self, messages: List[Dict[str, Any]], *, temperature: float = 0.2, max_tokens: int = 256,
              response_format: Optional[Dict[str, Any]] = None,
@@ -40,9 +45,9 @@ class OpenAIChatClient:
         if extra_body:
             payload.update(extra_body)
 
-        r = requests.post(url, headers=headers, json=payload, timeout=self.timeout_s)
-        r.raise_for_status()
-        data = r.json()
+        with self._session.post(url, headers=headers, json=payload, timeout=self.timeout_s) as r:
+            r.raise_for_status()
+            data = r.json()
         # OpenAI compatible
         return (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
 

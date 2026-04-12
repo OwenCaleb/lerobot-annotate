@@ -106,6 +106,17 @@
           </div>
         </div>
 
+        <div class="segment-form">
+          <div class="row">
+            <label class="grow">
+              Global instruction (task)
+              <input id="episodeInstruction" type="text" placeholder="pick and place objects into basket" />
+            </label>
+            <button id="applyInstructionAll" class="ghost" type="button">Apply to all episodes</button>
+          </div>
+          <div class="helper" id="instructionHelper"></div>
+        </div>
+
         <div class="video-shell">
           <video id="episodeVideo" controls preload="metadata"></video>
           <div class="timeline" id="timeline"></div>
